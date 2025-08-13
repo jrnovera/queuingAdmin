@@ -1,15 +1,62 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import BackButton from '../../components/BackButton';
 import NextButton from '../../components/NextButton';
 import { useQueueContext } from '../../context/QueueContext';
+import { useAuth } from '../../context/AuthContext';
+import { getUsers } from '../../firebase/firestore';
+import { useRouter } from 'next/navigation';
 
 export default function QueueStep3Page() {
-  const { queueData, updateQueueData, addCategory, removeCategory } = useQueueContext();
+  const { queueData, updateQueueData, addCategory, removeCategory, saveQueue } = useQueueContext();
   const [newCategoryName, setNewCategoryName] = useState('');
   const [notes, setNotes] = useState(queueData.notes || '');
-  const [staffEmail, setStaffEmail] = useState('');
+  const [users, setUsers] = useState<Array<{id: string, email: string, displayName: string}>>([]);
+  const [showDropdown, setShowDropdown] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useAuth();
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  
+  // Handle click outside dropdown to close it
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(null);
+        setSearchQuery('');
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+  
+  // Fetch users from Firestore
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setIsLoading(true);
+      try {
+        const usersList = await getUsers(user?.email);
+        setUsers(usersList as Array<{id: string, email: string, displayName: string}>);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        // If Firestore collection doesn't exist yet, use mock data
+        setUsers([
+          { id: '1', email: 'staff1@example.com', displayName: 'Staff One' },
+          { id: '2', email: 'staff2@example.com', displayName: 'Staff Two' },
+          { id: '3', email: 'staff3@example.com', displayName: 'Staff Three' }
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchUsers();
+  }, [user?.email]);
 
   // Handle category name change
   const handleCategoryNameChange = (index: number, name: string) => {
@@ -36,15 +83,19 @@ export default function QueueStep3Page() {
   const [newCategoryLimit, setNewCategoryLimit] = useState('50');
   const [newCategoryTimeLimit, setNewCategoryTimeLimit] = useState('5 Minutes');
 
-  // Handle adding a new category
+  // Handle add category button click
   const handleAddCategory = () => {
     if (newCategoryName.trim()) {
+      // Add a new category with the entered name and default values
       addCategory({
         name: newCategoryName.trim(),
         limit: newCategoryLimit,
-        timeLimit: newCategoryTimeLimit
+        timeLimit: newCategoryTimeLimit,
+        invitedStaff: []
       });
       setNewCategoryName('');
+    } else {
+      alert('Please enter a category name');
     }
   };
 
@@ -55,13 +106,41 @@ export default function QueueStep3Page() {
     updateQueueData({ notes: value });
   };
 
+  // Toggle dropdown visibility
+  const toggleDropdown = (index: number) => {
+    setShowDropdown(showDropdown === index ? null : index);
+  };
+  
   // Handle staff invitation
-  const handleInviteStaff = () => {
-    if (staffEmail.trim()) {
-      // In a real app, this would send an invitation to the staff email
-      console.log(`Invitation sent to staff: ${staffEmail}`);
-      alert(`Invitation sent to: ${staffEmail}`);
-      setStaffEmail('');
+  const handleInviteStaff = (email: string, categoryIndex: number) => {
+    // In a real app, this would send an invitation to the staff email
+    const updatedCategories = [...queueData.categories];
+    const category = updatedCategories[categoryIndex];
+    
+    // Initialize invitedStaff array if it doesn't exist
+    if (!category.invitedStaff) {
+      category.invitedStaff = [];
+    }
+    
+    // Add email if not already in the list
+    if (!category.invitedStaff.includes(email)) {
+      category.invitedStaff.push(email);
+      updateQueueData({ categories: updatedCategories });
+    }
+    
+    // Close dropdown after selection
+    setShowDropdown(null);
+    console.log(`Invitation sent to staff: ${email} for category ${categoryIndex}`);
+  };
+  
+  // Remove invited staff
+  const removeInvitedStaff = (categoryIndex: number, email: string) => {
+    const updatedCategories = [...queueData.categories];
+    const category = updatedCategories[categoryIndex];
+    
+    if (category.invitedStaff) {
+      category.invitedStaff = category.invitedStaff.filter(staff => staff !== email);
+      updateQueueData({ categories: updatedCategories });
     }
   };
 
@@ -115,12 +194,75 @@ export default function QueueStep3Page() {
             >
               -
             </button>
-            <button 
-              className="bg-black text-white px-2 py-1 text-xs h-6"
-              onClick={handleInviteStaff}
-            >
-              INVITE
-            </button>
+            <div className="relative">
+              <button 
+                className="bg-black text-white px-2 py-1 text-xs h-6"
+                onClick={() => toggleDropdown(index)}
+              >
+                INVITE
+              </button>
+              
+              {/* Dropdown for user selection */}
+              {showDropdown === index && (
+                <div ref={dropdownRef} className="absolute right-0 mt-1 w-64 bg-white border border-gray-300 shadow-lg z-10 max-h-64 overflow-y-auto">
+                  <div className="sticky top-0 bg-white p-2 border-b border-gray-200">
+                    <input
+                      type="text"
+                      placeholder="Search users..."
+                      className="w-full p-1 border border-gray-300 rounded text-sm"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  
+                  {isLoading ? (
+                    <div className="p-2 text-center">Loading users...</div>
+                  ) : users.length > 0 ? (
+                    <>
+                      {users
+                        .filter(user => 
+                          (user.displayName?.toLowerCase() || '').includes(searchQuery.toLowerCase()) || 
+                          (user.email?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+                        )
+                        .map(user => (
+                          <div 
+                            key={user.id} 
+                            className="p-2 hover:bg-gray-100 cursor-pointer flex justify-between items-center border-b border-gray-100"
+                            onClick={() => handleInviteStaff(user.email, index)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="font-medium">{user.displayName || 'User'}</span>
+                              <span className="text-xs text-gray-500">{user.email}</span>
+                            </div>
+                            <span className="text-xs bg-black text-white px-2 py-1 rounded-full">Invite</span>
+                          </div>
+                        ))}
+                    </>
+                  ) : (
+                    <div className="p-2 text-center">No users available</div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Display invited staff */}
+            {queueData.categories[index].invitedStaff && queueData.categories[index].invitedStaff.length > 0 && (
+              <div className="absolute mt-8 right-0 bg-white border border-gray-200 p-2 shadow-md z-10 w-48">
+                <div className="text-xs font-bold mb-1">Invited Staff:</div>
+                {queueData.categories[index].invitedStaff.map((email, idx) => (
+                  <div key={idx} className="text-xs flex justify-between items-center mb-1">
+                    <span>{email}</span>
+                    <button 
+                      className="text-red-500 text-xs"
+                      onClick={() => removeInvitedStaff(index, email)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         ))}
         
@@ -152,7 +294,22 @@ export default function QueueStep3Page() {
           ></textarea>
         </div>
         
-        <NextButton href="/generate/step4" />
+        <button 
+          className="bg-black text-white px-8 py-3 ml-auto block"
+          onClick={async () => {
+            try {
+              // Save queue data to Firestore
+              const queueId = await saveQueue();
+              // Navigate to QR code page with the queue ID
+              router.push(`/generate/qrcode?id=${queueId}`);
+            } catch (error) {
+              console.error('Error saving queue:', error);
+              alert('Error saving queue. Please try again.');
+            }
+          }}
+        >
+          GENERATE QR CODE
+        </button>
       </div>
     </div>
   );

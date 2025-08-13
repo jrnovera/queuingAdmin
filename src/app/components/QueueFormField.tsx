@@ -10,6 +10,7 @@ interface QueueFormFieldProps {
   options?: { value: string; label: string }[];
   fullWidth?: boolean;
   disabled?: boolean;
+  required?: boolean;
 }
 
 const QueueFormField: React.FC<QueueFormFieldProps> = ({
@@ -21,7 +22,8 @@ const QueueFormField: React.FC<QueueFormFieldProps> = ({
   isDropdown = false,
   options = [],
   fullWidth = false,
-  disabled = false
+  disabled = false,
+  required = true 
 }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (onChange) {
@@ -62,6 +64,7 @@ const QueueFormField: React.FC<QueueFormFieldProps> = ({
           value={value}
           onChange={handleChange}
           disabled={disabled}
+          required={required}
         />
       )}
     </div>

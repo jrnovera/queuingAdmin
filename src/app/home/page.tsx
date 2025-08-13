@@ -5,16 +5,20 @@ import Image from 'next/image';
 import Link from 'next/link';
 import NotificationButton from '../components/notificationButton';
 import BurgerMenu from '../components/BurgerMenu';
+import ProtectedRoute from '../components/ProtectedRoute';
+import { useAuth } from '../context/AuthContext';
 
 export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { logout } = useAuth();
 
   const toggleMenu = () => {
     setMenuOpen(!menuOpen);
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-white">
       {/* Header with burger menu and notification */}
       <header className="flex justify-between items-center p-4 border-b border-gray-200">
         <button 
@@ -43,14 +47,16 @@ export default function HomePage() {
           />
           <p className="text-lg font-bold mt-4">QUEUEV</p>
         </div>
-        <div className="border border-black p-2 mb-6">
-          <Link href="/generate/step1" className="bg-white text-black px-8 py-3 rounded text-lg">
+
+        <div className="border border-black p-2 mb-6 mt-6">
+          <Link href="/generate/step1" className="text-black px-8 py-3 rounded text-lg">
             GENERATE NOW
           </Link>
         </div>
         
         
       </main>
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

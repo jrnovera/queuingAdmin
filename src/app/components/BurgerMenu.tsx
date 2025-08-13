@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../context/AuthContext';
 
 interface BurgerMenuProps {
   isOpen: boolean;
@@ -9,17 +10,16 @@ interface BurgerMenuProps {
 
 const BurgerMenu: React.FC<BurgerMenuProps> = ({ isOpen, onClose }) => {
   const router = useRouter();
+  const { user, logout } = useAuth();
+  
   if (!isOpen) return null;
   
-  const handleLogout = () => {
-    // In a real app, you would clear authentication tokens/cookies here
-    // For example: localStorage.removeItem('authToken');
+  const handleLogout = async () => {
+    // Use the logout function from AuthContext
+    await logout();
     
     // Close the menu
     onClose();
-    
-    // Navigate to login page
-    router.push('/login');
   };
 
   return (
@@ -35,11 +35,11 @@ const BurgerMenu: React.FC<BurgerMenuProps> = ({ isOpen, onClose }) => {
         {/* User info */}
         <div className="p-4 border-b border-gray-200 flex items-center">
           <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center text-xl font-bold">
-            U
+            {user?.displayName?.[0] || 'U'}
           </div>
           <div className="ml-3">
-            <p className="font-bold">User Name</p>
-            <p className="text-sm text-gray-600">user@example.com</p>
+            <p className="font-bold">{user?.displayName || 'User'}</p>
+            <p className="text-sm text-gray-600">{user?.email || 'No email'}</p>
           </div>
         </div>
         
