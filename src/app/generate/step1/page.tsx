@@ -5,11 +5,13 @@ import BackButton from '../../components/BackButton';
 import NextButton from '../../components/NextButton';
 import QueueFormField from '../../components/QueueFormField';
 import { useQueueContext } from '../../context/QueueContext';
+import { useRouter } from 'next/navigation';
 
 export default function QueueStep1Page() {
   const { queueData, updateQueueData } = useQueueContext();
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
   
   // Parse existing dateTime if available, or use current date/time
   const existingDateTime = queueData.dateTime ? new Date(queueData.dateTime) : new Date();
@@ -129,7 +131,7 @@ export default function QueueStep1Page() {
     
     if (validateForm()) {
       // Form is valid, proceed to next step
-      window.location.href = '/generate/step2';
+      router.push('/generate/step2');
     } else {
       setIsSubmitting(false);
       // Scroll to the first error

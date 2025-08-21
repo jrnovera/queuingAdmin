@@ -127,6 +127,8 @@ export const getQueueById = async (queueId: string): Promise<Queue | null> => {
     }
     
     const queueData = queueSnapshot.data() as Queue;
+    // Ensure queueId is present in the returned object
+    const ensuredQueueId = queueData.queueId || queueSnapshot.id;
     
     // Get categories for this queue
     const categoriesQuery = query(collection(db, 'categories'), where('queueId', '==', queueId));
@@ -136,6 +138,7 @@ export const getQueueById = async (queueId: string): Promise<Queue | null> => {
     
     return {
       ...queueData,
+      queueId: ensuredQueueId,
       categories
     };
   } catch (error) {
@@ -162,6 +165,8 @@ export const getQueuesByUser = async (userId: string): Promise<Queue[]> => {
       
       return {
         ...queueData,
+        // Ensure queueId is set (fallback to Firestore doc id)
+        queueId: queueData.queueId || queueId,
         categories
       };
     }));

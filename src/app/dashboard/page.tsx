@@ -6,7 +6,7 @@ import Image from 'next/image';
 import BurgerMenu from '../components/BurgerMenu';
 import NotificationButton from '../components/notificationButton';
 import NotificationsDrawer, { AppNotification } from '../components/NotificationsDrawer';
-import { collectionGroup, limit, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
+import { collectionGroup, limit, onSnapshot, query, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/firestore';
 
 export default function DashboardPage() {
@@ -37,6 +37,31 @@ export default function DashboardPage() {
     }
   ]);
 
+  // Helper: parse dates like 'JULY 3, 2025' to a Date
+  const parseMonthNameDate = (s: string): Date | null => {
+    if (!s) return null;
+    const parts = s.trim().split(/\s+/); // [MONTH, DAY,, YEAR]
+    if (parts.length < 3) return null;
+    const monthName = parts[0].toUpperCase();
+    const dayStr = parts[1].replace(',', '');
+    const yearStr = parts[2];
+    const months = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+    const m = months.indexOf(monthName);
+    const d = Number(dayStr);
+    const y = Number(yearStr);
+    if (m < 0 || !d || !y) return null;
+    return new Date(y, m, d);
+  };
+
+  // Filter to only today's queues (by local date)
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const todayQueues = queues.filter(q => {
+    const dt = parseMonthNameDate(q.date);
+    return !!dt && dt >= start && dt < end;
+  });
+
   const toggleMenu = () => {
     setMenuOpen(!menuOpen);
   };
@@ -55,7 +80,6 @@ export default function DashboardPage() {
     try {
       const q = query(
         collectionGroup(db, 'registrations'),
-        orderBy('createdAt', 'desc'),
         limit(100)
       );
       const unsub = onSnapshot(q, (snap) => {
@@ -73,6 +97,12 @@ export default function DashboardPage() {
             message,
             createdAt,
           } as AppNotification;
+        })
+        .sort((a, b) => {
+          const toMillis = (x?: Date | Timestamp) => (!x ? 0 : x instanceof Timestamp ? x.toDate().getTime() : x.getTime());
+          const at = toMillis(a.createdAt);
+          const bt = toMillis(b.createdAt);
+          return bt - at;
         })
         // filter out items at or before lastClearedAt to show empty when user clicks
         .filter(it => !lastClearedAt || (it.createdAt instanceof Date && it.createdAt > lastClearedAt));
@@ -120,9 +150,9 @@ export default function DashboardPage() {
           </Link>
         </div>
         
-        {queues.length > 0 ? (
+        {todayQueues.length > 0 ? (
           <div className="space-y-4">
-            {queues.map(queue => (
+            {todayQueues.map(queue => (
               <div key={queue.id} className="border border-black p-4">
                 <div className="flex justify-between items-start">
                   <div>
@@ -151,7 +181,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="text-center py-10">
-            <p>No queues found. Create your first queue!</p>
+            <p>No queues scheduled for today.</p>
           </div>
         )}
       </main>

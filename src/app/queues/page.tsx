@@ -23,6 +23,7 @@ export default function ManageQueuesPage() {
   const [queues, setQueues] = useState<QueueListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD
   const { user } = useAuth();
   const router = useRouter();
   const navigatingAway = useRef(false);
@@ -118,9 +119,21 @@ export default function ManageQueuesPage() {
   }, [tabLabels.join('|')]);
 
   // Filter queues by active category (show all if no active type)
-  const filteredQueues = !activeCategory
+  const categoryFiltered = !activeCategory
     ? queues
     : queues.filter(q => (q.type || '') === activeCategory);
+
+  // If a date is selected, further filter to that local day using time_in or schedule
+  const filteredQueues = categoryFiltered.filter(q => {
+    if (!selectedDate) return true;
+    const dateToCheck: Date | null = q.time_in?.toDate?.() || q.schedule?.toDate?.() || null;
+    if (!dateToCheck) return false;
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    if (!y || !m || !d) return true;
+    const start = new Date(y, m - 1, d);
+    const end = new Date(y, m - 1, d + 1);
+    return dateToCheck >= start && dateToCheck < end;
+  });
 
   if (loading) {
     return (
@@ -193,26 +206,46 @@ export default function ManageQueuesPage() {
               </button>
             ))
           )}
+          {/* Date filter */}
+          <div className="ml-auto flex items-center gap-2 px-3 py-2 border-l border-gray-800">
+            <label className="text-xs font-semibold" htmlFor="dateFilter">DATE</label>
+            <input
+              id="dateFilter"
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="border border-gray-800 text-xs px-2 py-1"
+            />
+            {selectedDate && (
+              <button
+                type="button"
+                onClick={() => setSelectedDate('')}
+                className="text-xs underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Table */}
-        <div className="border border-t-0 border-gray-800 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full table-fixed">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="w-28 text-left text-xs font-semibold tracking-wider px-3 py-2">QUEUE NO.</th>
-                  <th className="text-left text-xs font-semibold tracking-wider px-3 py-2">NAME</th>
-                  <th className="w-40 text-left text-xs font-semibold tracking-wider px-3 py-2">TIME IN</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredQueues.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="px-3 py-8 text-center text-gray-500">No queues yet. Create a new queue to get started.</td>
+        {/* Table or Empty State (hide header if empty) */}
+        {filteredQueues.length === 0 ? (
+          <div className="border border-t-0 border-gray-800 p-8 text-center text-gray-500">
+            {selectedDate ? 'No queues for the selected date.' : 'No queues yet. Create a new queue to get started.'}
+          </div>
+        ) : (
+          <div className="border border-t-0 border-gray-800 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed">
+                <thead>
+                  <tr className="border-b border-gray-800">
+                    <th className="w-28 text-left text-xs font-semibold tracking-wider px-3 py-2">QUEUE NO.</th>
+                    <th className="text-left text-xs font-semibold tracking-wider px-3 py-2">NAME</th>
+                    <th className="w-40 text-left text-xs font-semibold tracking-wider px-3 py-2">TIME IN</th>
                   </tr>
-                ) : (
-                  filteredQueues.map((queue, idx) => (
+                </thead>
+                <tbody>
+                  {filteredQueues.map((queue, idx) => (
                     <tr key={queue.id} className="border-t border-gray-300 hover:bg-gray-50">
                       <td className="px-3 py-2 align-top text-sm">{idx + 1}</td>
                       <td className="px-3 py-2 align-top">
@@ -221,12 +254,12 @@ export default function ManageQueuesPage() {
                       </td>
                       <td className="px-3 py-2 align-top text-sm">{formatTimestamp(queue.time_in) || formatTimestamp(queue.schedule)}</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Actions */}
         <div className="mt-4 flex items-center justify-between">

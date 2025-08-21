@@ -62,10 +62,10 @@ export default function HistoryPage() {
         </div>
 
         <div className="space-y-4">
-          {queues.map((q) => (
-            <div key={q.queueId || q.queueName} className="border border-black flex items-center p-3">
+          {queues.map((q, idx) => (
+            <div key={(q.queueId || q.queueName || 'item') + '-' + idx} className="border border-black flex items-center p-3">
               <div className="mr-3 flex-shrink-0">
-                <QRCodeCanvas value={q.queueId || q.queueName} size={56} bgColor="#ffffff" fgColor="#000000" includeMargin={false} />
+                <QRCodeCanvas value={q.queueId || q.queueName || String(idx)} size={56} bgColor="#ffffff" fgColor="#000000" includeMargin={false} />
               </div>
               <div className="flex-1 text-black">
                 <div className="font-semibold uppercase tracking-wide">{q.queueName || 'Untitled Queue'}</div>
