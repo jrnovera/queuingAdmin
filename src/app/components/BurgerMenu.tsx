@@ -49,10 +49,8 @@ const BurgerMenu: React.FC<BurgerMenuProps> = ({ isOpen, onClose }) => {
             <Link href="/account" className="block p-2 hover:bg-gray-100">
               👤 Account
             </Link>
-            <Link href="/dashboard" className="block p-2 hover:bg-gray-100">
-              📊 Dashboard
-            </Link>
-            <Link href="/manage-queues" className="block p-2 hover:bg-gray-100">
+          
+            <Link href="/queues" className="block p-2 hover:bg-gray-100">
               📋 Manage Queues
             </Link>
             <Link href="/history" className="block p-2 hover:bg-gray-100">

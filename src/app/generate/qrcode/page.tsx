@@ -26,6 +26,14 @@ export default function QRCodeDisplayPage() {
     day: 'numeric', 
     year: 'numeric' 
   });
+  const formatTimeDate = (iso?: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const date = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    return `${time} / ${date}`;
+  };
   
   useEffect(() => {
     async function fetchQueue() {
@@ -158,7 +166,7 @@ export default function QRCodeDisplayPage() {
           <div className="border-2 border-black p-6 flex-1 text-left">
             <h2 className="text-lg font-bold mb-1">{queue.queueName}</h2>
             <p className="text-sm">{queue.address}</p>
-            <p className="mt-4 text-sm">Generated on: {formattedDate}</p>
+            <p className="mt-4 text-sm">Scheduled: {formatTimeDate(queue.dateTime)}</p>
             <p className="text-sm">Valid until: {new Date(queue.expiration).toLocaleString()}</p>
             {queue.breakTimeFrom && queue.breakTimeTo && (
               <p className="text-sm">Break time: {queue.breakTimeFrom} - {queue.breakTimeTo}</p>

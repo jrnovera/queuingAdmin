@@ -1,26 +1,76 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import NotificationButton from '../components/notificationButton';
 import BurgerMenu from '../components/BurgerMenu';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
+import NotificationsDrawer, { AppNotification } from '../components/NotificationsDrawer';
+import { collectionGroup, limit, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
+import { db } from '../firebase/firestore';
 
 export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { logout } = useAuth();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notifLoading, setNotifLoading] = useState(true);
+  const [lastClearedAt, setLastClearedAt] = useState<Date | null>(null);
 
   const toggleMenu = () => {
     setMenuOpen(!menuOpen);
   };
 
+  const openNotifications = () => {
+    setNotifOpen(true);
+    setHasUnread(false);
+    setLastClearedAt(new Date());
+  };
+
+  useEffect(() => {
+    try {
+      const q = query(
+        collectionGroup(db, 'registrations'),
+        orderBy('createdAt', 'desc'),
+        limit(100)
+      );
+      const unsub = onSnapshot(q, (snap) => {
+        const items: AppNotification[] = snap.docs.map(d => {
+          const data = d.data() as any;
+          const actor = data.displayName || data.name || 'Someone';
+          const queueName = data.queueName || data.name_of_queue || data.type || 'queue';
+          const createdAtTs: Timestamp | undefined = (data.createdAt as Timestamp) || (data.time_in as Timestamp) || undefined;
+          const createdAt: Date | undefined = createdAtTs ? createdAtTs.toDate() : undefined;
+          return {
+            id: d.id,
+            actorName: actor,
+            queueName,
+            message: `${actor} registered in the ${queueName.toUpperCase()} queue.`,
+            createdAt,
+          };
+        }).filter(it => !lastClearedAt || (it.createdAt instanceof Date && it.createdAt > lastClearedAt));
+        setNotifications(items);
+        setNotifLoading(false);
+        if (!notifOpen && items.length > 0) setHasUnread(true);
+      }, (err) => {
+        console.error('Notifications listener error:', err);
+        setNotifLoading(false);
+      });
+      return () => unsub();
+    } catch (e) {
+      console.error('Failed to init notifications listener:', e);
+      setNotifLoading(false);
+    }
+  }, [notifOpen, lastClearedAt]);
+
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-white">
       {/* Header with burger menu and notification */}
-      <header className="flex justify-between items-center p-4 border-b border-gray-200">
+      <header className="relative z-40 flex justify-between items-center p-4 border-b border-gray-200">
         <button 
           onClick={toggleMenu}
           className="text-3xl focus:outline-none"
@@ -29,7 +79,7 @@ export default function HomePage() {
           ☰
         </button>
        
-        <NotificationButton />
+        <NotificationButton onClick={openNotifications} hasUnread={hasUnread} />
       </header>
 
       {/* Burger Menu Component */}
@@ -56,6 +106,12 @@ export default function HomePage() {
         
         
       </main>
+      <NotificationsDrawer
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        notifications={notifications}
+        loading={notifLoading}
+      />
       </div>
     </ProtectedRoute>
   );
