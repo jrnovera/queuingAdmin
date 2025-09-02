@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import BackButton from '../../components/BackButton';
-import NextButton from '../../components/NextButton';
 import QueueFormField from '../../components/QueueFormField';
 import { useQueueContext } from '../../context/QueueContext';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function QueueStep1Page() {
   const { queueData, updateQueueData } = useQueueContext();
@@ -130,7 +130,10 @@ export default function QueueStep1Page() {
     setIsSubmitting(true);
     
     if (validateForm()) {
-      // Form is valid, proceed to next step
+      // Debug log to check data before navigation
+      console.log('Step 1 - Queue data before navigation:', queueData);
+      
+      // Form is valid, proceed to next step using router.push to preserve context
       router.push('/generate/step2');
     } else {
       setIsSubmitting(false);

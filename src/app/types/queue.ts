@@ -17,6 +17,7 @@ export interface Queue {
   expiration: string; // ISO string format
   breakTimeFrom?: string;
   breakTimeTo?: string;
+  scheduleTime?: string; // Added to fix TypeScript error
   categories: QueueCategory[];
   createdBy: string; // Auth user ID
   createdAt?: string; // ISO string format

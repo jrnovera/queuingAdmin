@@ -1,4 +1,4 @@
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, DocumentData, addDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, query, where, DocumentData, updateDoc } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 import { app } from './config';
 import { Queue, QueueCategory } from '../types/queue';
@@ -84,15 +84,22 @@ export const createQueue = async (queueData: Queue): Promise<string> => {
     // Create queue document with the generated ID
     const queueRef = doc(db, 'queues', queueId);
     
-    // Prepare queue data with timestamps
-    const queueWithTimestamps = {
+    // Ensure required fields are not empty
+    const sanitizedQueueData = {
       ...queueData,
       queueId,
+      queueName: queueData.queueName || '',
+      address: queueData.address || '',
+      dateTime: queueData.dateTime || new Date().toISOString(),
+      expiration: queueData.expiration || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       createdAt: new Date().toISOString(),
     };
     
+    // Debug log to check what data is being saved
+    console.log('Saving queue data:', sanitizedQueueData);
+    
     // Save queue document
-    await setDoc(queueRef, queueWithTimestamps);
+    await setDoc(queueRef, sanitizedQueueData);
     
     // Create category documents with references to the queue
     if (queueData.categories && queueData.categories.length > 0) {

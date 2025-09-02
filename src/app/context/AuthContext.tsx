@@ -62,11 +62,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('User created and saved to Firestore');
         
         // After successful signup, redirect to home
-        router.push('/home');
+        window.location.href = '/home';
       }
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Signup error:', err.message);
+    } catch (err: Error | unknown) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      console.error('Signup error:', err instanceof Error ? err.message : 'Unknown error');
     }
   };
 
@@ -75,10 +75,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setError(null);
       await signInWithEmailAndPassword(auth, email, password);
-      router.push('/home');
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Login error:', err.message);
+      window.location.href = '/home';
+    } catch (err: Error | unknown) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      console.error('Login error:', err instanceof Error ? err.message : 'Unknown error');
     }
   };
 
@@ -86,10 +86,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       await signOut(auth);
-      router.push('/auth');
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Logout error:', err.message);
+      window.location.href = '/auth';
+    } catch (err: Error | unknown) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      console.error('Logout error:', err instanceof Error ? err.message : 'Unknown error');
     }
   };
 

@@ -36,7 +36,7 @@ export default function ManageQueuesPage() {
       return;
     }
     fetchQueues();
-  }, [user]);
+  }, [user, router]);
 
   const fetchQueues = async () => {
     try {
@@ -44,7 +44,17 @@ export default function ManageQueuesPage() {
       // Fetch ALL from queuesList collection
       const querySnapshot = await getDocs(collection(db, 'queuesList'));
       const queuesData: QueueListItem[] = querySnapshot.docs.map(d => {
-        const data = d.data() as any;
+        interface QueueData {
+          address?: string;
+          index1?: number | string;
+          name?: string;
+          schedule?: Timestamp;
+          status?: string;
+          time_in?: Timestamp;
+          type?: string;
+          uid?: string;
+        }
+        const data = d.data() as QueueData;
         return {
           id: d.id,
           address: data.address || '',
@@ -107,25 +117,8 @@ export default function ManageQueuesPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Derive category names and update default active when queues change
-  const tabLabels = Array.from(new Set(queues.map(q => q.type || ''))).filter(Boolean);
-  useEffect(() => {
-    // Ensure activeCategory is valid; set to first available type if empty/invalid
-    if (tabLabels.length === 0) {
-      setActiveCategory('');
-    } else if (!activeCategory || !tabLabels.includes(activeCategory)) {
-      setActiveCategory(tabLabels[0]);
-    }
-  }, [tabLabels.join('|')]);
-
-  // Filter queues by active category (show all if no active type)
-  const categoryFiltered = !activeCategory
-    ? queues
-    : queues.filter(q => (q.type || '') === activeCategory);
-
-  // If a date is selected, further filter to that local day using time_in or schedule
-  const filteredQueues = categoryFiltered.filter(q => {
-    if (!selectedDate) return true;
+  // Filter queues by selected date first, then derive category names
+  const dateFilteredQueues = selectedDate ? queues.filter(q => {
     const dateToCheck: Date | null = q.time_in?.toDate?.() || q.schedule?.toDate?.() || null;
     if (!dateToCheck) return false;
     const [y, m, d] = selectedDate.split('-').map(Number);
@@ -133,7 +126,24 @@ export default function ManageQueuesPage() {
     const start = new Date(y, m - 1, d);
     const end = new Date(y, m - 1, d + 1);
     return dateToCheck >= start && dateToCheck < end;
-  });
+  }) : queues;
+
+  // Derive category names from date-filtered queues
+  const tabLabels = Array.from(new Set(dateFilteredQueues.map(q => q.type || ''))).filter(Boolean);
+  
+  useEffect(() => {
+    // Ensure activeCategory is valid; set to first available type if empty/invalid
+    if (tabLabels.length === 0) {
+      setActiveCategory('');
+    } else if (!activeCategory || !tabLabels.includes(activeCategory)) {
+      setActiveCategory(tabLabels[0]);
+    }
+  }, [tabLabels, activeCategory, selectedDate]);
+
+  // Filter queues by active category from the date-filtered queues
+  const filteredQueues = !activeCategory
+    ? dateFilteredQueues
+    : dateFilteredQueues.filter(q => (q.type || '') === activeCategory);
 
   if (loading) {
     return (

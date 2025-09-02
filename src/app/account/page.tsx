@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../firebase/config';
 import { updateProfile } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/firestore';
 
 export default function AccountPage() {
@@ -36,12 +36,20 @@ export default function AccountPage() {
         const ref = doc(db, 'users', user.uid);
         const snap = await getDoc(ref);
         const data = snap.exists() ? snap.data() : {};
+        interface UserData {
+          displayName?: string;
+          username?: string;
+          birthday?: string;
+          address?: string;
+          phone?: string;
+        }
+        const userData = data as UserData;
         setForm({
-          name: user.displayName || (data as any).displayName || '',
-          username: (data as any).username || '',
-          birthday: (data as any).birthday || '',
-          address: (data as any).address || '',
-          phone: (data as any).phone || '',
+          name: user.displayName || userData.displayName || '',
+          username: userData.username || '',
+          birthday: userData.birthday || '',
+          address: userData.address || '',
+          phone: userData.phone || '',
         });
       } finally {
         setLoading(false);
@@ -91,8 +99,8 @@ export default function AccountPage() {
       }, { merge: true });
       setMessage('Profile updated successfully.');
       setEditing(false);
-    } catch (e: any) {
-      setMessage(e.message || 'Failed to update profile.');
+    } catch (e: Error | unknown) {
+      setMessage(e instanceof Error ? e.message : 'Failed to update profile.');
     } finally {
       setBusy(false);
       setConfirmOpen(false);

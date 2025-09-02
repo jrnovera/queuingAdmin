@@ -11,6 +11,8 @@ const initialQueueData: Queue = {
   address: '',
   dateTime: '',
   expiration: '',
+  breakTimeFrom: '',
+  breakTimeTo: '',
   categories: [],
   createdBy: '',
   notes: '',
@@ -35,11 +37,31 @@ const QueueContext = createContext<QueueContextType | undefined>(undefined);
 // Provider component
 export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
-  const [queueData, setQueueData] = useState<Queue>(initialQueueData);
+  const [queueData, setQueueData] = useState<Queue>(() => {
+    // Load from localStorage on initialization
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('queueData');
+      if (saved) {
+        try {
+          return { ...initialQueueData, ...JSON.parse(saved) };
+        } catch (error) {
+          console.error('Error parsing saved queue data:', error);
+        }
+      }
+    }
+    return initialQueueData;
+  });
 
-  // Update queue data in state
+  // Update queue data in state and save to localStorage
   const updateQueueData = (data: Partial<Queue>) => {
-    setQueueData(prev => ({ ...prev, ...data }));
+    setQueueData(prev => {
+      const newData = { ...prev, ...data };
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('queueData', JSON.stringify(newData));
+      }
+      return newData;
+    });
   };
 
   // Add a new category to the queue
@@ -53,21 +75,35 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
     
     const newCategory = category ? { ...defaultCategory, ...category } : defaultCategory;
     
-    setQueueData(prev => ({
-      ...prev,
-      categories: [
-        ...prev.categories,
-        newCategory
-      ]
-    }));
+    setQueueData(prev => {
+      const newData = {
+        ...prev,
+        categories: [
+          ...prev.categories,
+          newCategory
+        ]
+      };
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('queueData', JSON.stringify(newData));
+      }
+      return newData;
+    });
   };
 
   // Remove a category from the queue
   const removeCategory = (index: number) => {
-    setQueueData(prev => ({
-      ...prev,
-      categories: prev.categories.filter((_, i) => i !== index)
-    }));
+    setQueueData(prev => {
+      const newData = {
+        ...prev,
+        categories: prev.categories.filter((_, i) => i !== index)
+      };
+      // Save to localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('queueData', JSON.stringify(newData));
+      }
+      return newData;
+    });
   };
   
   // Save queue to Firestore
@@ -76,21 +112,41 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
       throw new Error('User must be authenticated to create a queue');
     }
     
-    // Set the creator ID
+    // Debug log to check queue data before saving
+    console.log('Queue data before saving:', queueData);
+    
+    // Validate required fields
+    if (!queueData.queueName || queueData.queueName.trim() === '') {
+      throw new Error('Queue name is required');
+    }
+    
+    if (!queueData.address || queueData.address.trim() === '') {
+      throw new Error('Address is required');
+    }
+    
+    // Set the creator ID and ensure all required fields are present
     const queueWithCreator = {
       ...queueData,
-      createdBy: user.uid
+      createdBy: user.uid,
+      queueName: queueData.queueName.trim(),
+      address: queueData.address.trim(),
+      dateTime: queueData.dateTime || new Date().toISOString(),
+      expiration: queueData.expiration || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     };
     
     try {
       // Save to Firestore
       const queueId = await createQueue(queueWithCreator);
       
-      // Update state with the new queue ID
-      setQueueData(prev => ({
-        ...prev,
-        queueId
-      }));
+      // Update state with the new queue ID and clear localStorage
+      setQueueData(prev => {
+        const newData = { ...prev, queueId };
+        // Clear localStorage after successful save
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('queueData');
+        }
+        return newData;
+      });
       
       return queueId;
     } catch (error) {

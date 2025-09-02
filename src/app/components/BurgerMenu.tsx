@@ -1,6 +1,5 @@
 import React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 
 interface BurgerMenuProps {
@@ -9,7 +8,6 @@ interface BurgerMenuProps {
 }
 
 const BurgerMenu: React.FC<BurgerMenuProps> = ({ isOpen, onClose }) => {
-  const router = useRouter();
   const { user, logout } = useAuth();
   
   if (!isOpen) return null;

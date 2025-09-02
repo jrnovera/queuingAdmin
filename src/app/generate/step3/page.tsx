@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import BackButton from '../../components/BackButton';
-import NextButton from '../../components/NextButton';
 import { useQueueContext } from '../../context/QueueContext';
 import { useAuth } from '../../context/AuthContext';
 import { getUsers } from '../../firebase/firestore';
@@ -11,11 +10,16 @@ import { useRouter } from 'next/navigation';
 export default function QueueStep3Page() {
   const { queueData, updateQueueData, addCategory, removeCategory, saveQueue } = useQueueContext();
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryLimit, setNewCategoryLimit] = useState('10');
+  const [newCategoryTimeLimit, setNewCategoryTimeLimit] = useState('5');
+  const [inviteEmails, setInviteEmails] = useState<string[]>([]);
+  const [currentEmail, setCurrentEmail] = useState('');
+  const [showInviteDropdown, setShowInviteDropdown] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [notes, setNotes] = useState(queueData.notes || '');
   const [users, setUsers] = useState<Array<{id: string, email: string, displayName: string}>>([]);
   const [showDropdown, setShowDropdown] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -79,9 +83,7 @@ export default function QueueStep3Page() {
     updateQueueData({ categories: updatedCategories });
   };
 
-  // State for new category fields
-  const [newCategoryLimit, setNewCategoryLimit] = useState('50');
-  const [newCategoryTimeLimit, setNewCategoryTimeLimit] = useState('5 Minutes');
+  // State for new category fields - removed duplicates
 
   // Handle add category button click
   const handleAddCategory = () => {
@@ -150,7 +152,7 @@ export default function QueueStep3Page() {
       
       <div className="max-w-3xl mx-auto">
         {queueData.categories && queueData.categories.map((category, index) => (
-          <div key={index} className="flex gap-4 mb-4">
+          <div key={`category-${index}-${category.name || index}`} className="flex gap-4 mb-4">
             <div className="w-1/2">
               <input
                 type="text"
@@ -251,7 +253,7 @@ export default function QueueStep3Page() {
               <div className="absolute mt-8 right-0 bg-white border border-gray-200 p-2 shadow-md z-10 w-48">
                 <div className="text-xs font-bold mb-1">Invited Staff:</div>
                 {queueData.categories[index].invitedStaff.map((email, idx) => (
-                  <div key={idx} className="text-xs flex justify-between items-center mb-1">
+                  <div key={`staff-${index}-${idx}-${email}`} className="text-xs flex justify-between items-center mb-1">
                     <span>{email}</span>
                     <button 
                       className="text-red-500 text-xs"
@@ -298,13 +300,30 @@ export default function QueueStep3Page() {
           className="bg-black text-white px-8 py-3 ml-auto block"
           onClick={async () => {
             try {
+              // Debug log before saving
+              console.log('Step 3 - Final queue data before saving:', queueData);
+              
+              // Validate required fields before saving
+              if (!queueData.queueName || queueData.queueName.trim() === '') {
+                alert('Queue name is required. Please go back to Step 1 and enter a queue name.');
+                return;
+              }
+              
+              if (!queueData.address || queueData.address.trim() === '') {
+                alert('Address is required. Please go back to Step 1 and enter an address.');
+                return;
+              }
+              
               // Save queue data to Firestore
               const queueId = await saveQueue();
-              // Navigate to QR code page with the queue ID
+              console.log('Queue saved successfully with ID:', queueId);
+              
+              // Navigate to QR code page with the queue ID using router.push
               router.push(`/generate/qrcode?id=${queueId}`);
             } catch (error) {
               console.error('Error saving queue:', error);
-              alert('Error saving queue. Please try again.');
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+              alert(`Error saving queue: ${errorMessage}. Please try again.`);
             }
           }}
         >

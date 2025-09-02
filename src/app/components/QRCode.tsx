@@ -17,19 +17,17 @@ const QRCode: React.FC<QRCodeProps> = ({
   location = 'Default Location'
 }) => {
   const [qrValue, setQrValue] = useState('');
-  const [currentDate, setCurrentDate] = useState('');
   
   useEffect(() => {
     // Generate a new QR code value based on the current date
     const today = new Date();
     const dateString = today.toISOString().split('T')[0]; // YYYY-MM-DD format
-    const formattedDate = today.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric', 
-      year: 'numeric' 
-    });
-    
-    setCurrentDate(formattedDate);
+    // Format date for display if needed in the future
+    // const formattedDate = today.toLocaleDateString('en-US', { 
+    //   month: 'long', 
+    //   day: 'numeric', 
+    //   year: 'numeric' 
+    // });
     
     // Create a unique value for the QR code that changes daily
     const uniqueValue = data ? 

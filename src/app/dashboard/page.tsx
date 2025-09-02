@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import BurgerMenu from '../components/BurgerMenu';
 import NotificationButton from '../components/notificationButton';
 import NotificationsDrawer, { AppNotification } from '../components/NotificationsDrawer';
@@ -84,7 +83,16 @@ export default function DashboardPage() {
       );
       const unsub = onSnapshot(q, (snap) => {
         const items: AppNotification[] = snap.docs.map((d) => {
-          const data = d.data() as any;
+          interface RegistrationData {
+            displayName?: string;
+            name?: string;
+            queueName?: string;
+            name_of_queue?: string;
+            type?: string;
+            createdAt?: Timestamp;
+            time_in?: Timestamp;
+          }
+          const data = d.data() as RegistrationData;
           const actor = data.displayName || data.name || 'Someone';
           const queueName = data.queueName || data.name_of_queue || data.type || 'queue';
           const createdAtTs: Timestamp | undefined = (data.createdAt as Timestamp) || (data.time_in as Timestamp) || undefined;

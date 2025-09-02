@@ -8,7 +8,7 @@ import BurgerMenu from '../components/BurgerMenu';
 import ProtectedRoute from '../components/ProtectedRoute';
 import { useAuth } from '../context/AuthContext';
 import NotificationsDrawer, { AppNotification } from '../components/NotificationsDrawer';
-import { collectionGroup, limit, onSnapshot, query, Timestamp } from 'firebase/firestore';
+import { collectionGroup, limit, onSnapshot, query, Timestamp, DocumentData } from 'firebase/firestore';
 import { db } from '../firebase/firestore';
 
 export default function HomePage() {
@@ -31,46 +31,69 @@ export default function HomePage() {
   };
 
   useEffect(() => {
-    try {
-      const q = query(
-        collectionGroup(db, 'registrations'),
-        limit(100)
-      );
-      const unsub = onSnapshot(q, (snap) => {
-        const items: AppNotification[] = snap.docs
-          .map(d => {
-            const data = d.data() as any;
-            const actor = data.displayName || data.name || 'Someone';
-            const queueName = data.queueName || data.name_of_queue || data.type || 'queue';
-            const createdAtTs: Timestamp | undefined = (data.createdAt as Timestamp) || (data.time_in as Timestamp) || undefined;
-            const createdAt: Date | undefined = createdAtTs ? createdAtTs.toDate() : undefined;
-            return {
-              id: d.id,
-              actorName: actor,
-              queueName,
-              message: `${actor} registered in the ${queueName.toUpperCase()} queue.`,
-              createdAt,
-            } as AppNotification;
-          })
-          .sort((a, b) => {
-            const toMillis = (x?: Date | Timestamp) => (!x ? 0 : x instanceof Timestamp ? x.toDate().getTime() : x.getTime());
-            const at = toMillis(a.createdAt);
-            const bt = toMillis(b.createdAt);
-            return bt - at;
-          })
-          .filter(it => !lastClearedAt || (it.createdAt instanceof Date && it.createdAt > lastClearedAt));
-        setNotifications(items);
+    let unsubscribe: (() => void) | null = null;
+    
+    const setupListener = async () => {
+      try {
+        const q = query(
+          collectionGroup(db, 'registrations'),
+          limit(100)
+        );
+        
+        unsubscribe = onSnapshot(q, (snap) => {
+          const items: AppNotification[] = snap.docs
+            .map((d, index) => {
+              // Define interface for notification data
+              interface NotificationData {
+                displayName?: string;
+                name?: string;
+                queueName?: string;
+                name_of_queue?: string;
+                type?: string;
+                createdAt?: Timestamp;
+                time_in?: Timestamp;
+              }
+              
+              const data = d.data() as NotificationData;
+              const actor = data.displayName || data.name || 'Someone';
+              const queueName = data.queueName || data.name_of_queue || data.type || 'queue';
+              const createdAtTs: Timestamp | undefined = (data.createdAt as Timestamp) || (data.time_in as Timestamp) || undefined;
+              const createdAt: Date | undefined = createdAtTs ? createdAtTs.toDate() : undefined;
+              return {
+                id: d.id || `notification-${index}`,
+                actorName: actor,
+                queueName,
+                message: `${actor} registered in the ${queueName.toUpperCase()} queue.`,
+                createdAt,
+              } as AppNotification;
+            })
+            .sort((a, b) => {
+              const toMillis = (x?: Date | Timestamp) => (!x ? 0 : x instanceof Timestamp ? x.toDate().getTime() : x.getTime());
+              const at = toMillis(a.createdAt);
+              const bt = toMillis(b.createdAt);
+              return bt - at;
+            })
+            .filter(it => !lastClearedAt || (it.createdAt instanceof Date && it.createdAt > lastClearedAt));
+          setNotifications(items);
+          setNotifLoading(false);
+          if (!notifOpen && items.length > 0) setHasUnread(true);
+        }, (err) => {
+          console.error('Notifications listener error:', err);
+          setNotifLoading(false);
+        });
+      } catch (e) {
+        console.error('Failed to init notifications listener:', e);
         setNotifLoading(false);
-        if (!notifOpen && items.length > 0) setHasUnread(true);
-      }, (err) => {
-        console.error('Notifications listener error:', err);
-        setNotifLoading(false);
-      });
-      return () => unsub();
-    } catch (e) {
-      console.error('Failed to init notifications listener:', e);
-      setNotifLoading(false);
-    }
+      }
+    };
+    
+    setupListener();
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [notifOpen, lastClearedAt]);
 
   return (

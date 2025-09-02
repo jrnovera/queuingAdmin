@@ -8,24 +8,73 @@ import { useQueueContext } from '../../context/QueueContext';
 
 export default function QueueStep2Page() {
   const { queueData, updateQueueData } = useQueueContext();
-  const [expirationDate, setExpirationDate] = useState(queueData.expirationDate || 'JULY 2, 2025');
+  
+  // Format the date for display (e.g., "JULY 2, 2025")
+  const formatDateForDisplay = (date: Date) => {
+    return date.toLocaleDateString('en-US', { 
+      month: 'long', 
+      day: 'numeric', 
+      year: 'numeric' 
+    }).toUpperCase();
+  };
+  
+  // Generate a list of dates for the next 30 days starting from today
+  const generateDateOptions = () => {
+    const dates = [];
+    const today = new Date();
+    
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      const formattedDate = formatDateForDisplay(date);
+      dates.push({ value: formattedDate, label: formattedDate });
+    }
+    
+    return dates;
+  };
+  
+  const dateOptions = generateDateOptions();
+  const [expirationDate, setExpirationDate] = useState(() => {
+    if (queueData.expiration) {
+      return formatDateForDisplay(new Date(queueData.expiration));
+    }
+    return formatDateForDisplay(new Date());
+  });
 
   // Handle form field changes
   const handleExpirationTimeChange = (value: string) => {
-    updateQueueData({ expirationTime: value });
+    // Update expiration with new time
+    const currentExpiration = queueData.expiration ? new Date(queueData.expiration) : new Date();
+    const [time, period] = value.split(' ');
+    const [hours, minutes] = time.split(':');
+    let hour24 = parseInt(hours);
+    
+    if (period === 'PM' && hour24 !== 12) hour24 += 12;
+    if (period === 'AM' && hour24 === 12) hour24 = 0;
+    
+    currentExpiration.setHours(hour24, parseInt(minutes), 0, 0);
+    updateQueueData({ expiration: currentExpiration.toISOString() });
   };
 
   const handleExpirationDateChange = (value: string) => {
-    updateQueueData({ expirationDate: value });
     setExpirationDate(value);
+    // Parse the date and update expiration
+    const [month, day, year] = value.split(/[\s,]+/).filter(Boolean);
+    const newDate = new Date(`${month} ${day} ${year}`);
+    
+    // Preserve existing time if available
+    const currentExpiration = queueData.expiration ? new Date(queueData.expiration) : new Date();
+    newDate.setHours(currentExpiration.getHours(), currentExpiration.getMinutes(), 0, 0);
+    
+    updateQueueData({ expiration: newDate.toISOString() });
   };
 
   const handleBreakTimeStartChange = (value: string) => {
-    updateQueueData({ breakTimeStart: value });
+    updateQueueData({ breakTimeFrom: value });
   };
 
   const handleBreakTimeEndChange = (value: string) => {
-    updateQueueData({ breakTimeEnd: value });
+    updateQueueData({ breakTimeTo: value });
   };
 
   return (
@@ -42,7 +91,7 @@ export default function QueueStep2Page() {
             showLabel={false}
               label="SET QR EXPIRATION"
               isDropdown
-              value={queueData.expirationTime}
+              value={queueData.expiration ? new Date(queueData.expiration).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : '1:00 PM'}
               onChange={handleExpirationTimeChange}
               options={[
                 { value: '1:00 PM', label: '1:00 PM' },
@@ -74,12 +123,7 @@ export default function QueueStep2Page() {
               label=""
               value={expirationDate}
               onChange={handleExpirationDateChange}
-              options={[
-                { value: 'JULY 2, 2025', label: 'JULY 2, 2025' },
-                { value: 'JULY 3, 2025', label: 'JULY 3, 2025' },
-                { value: 'JULY 4, 2025', label: 'JULY 4, 2025' },
-                { value: 'JULY 5, 2025', label: 'JULY 5, 2025' },
-              ]}
+              options={dateOptions}
             />
             <div className="text-center text-sm text-gray-600 mt-1">DATE</div>
           </div>
@@ -94,7 +138,7 @@ export default function QueueStep2Page() {
                   isDropdown
               showLabel={false}
               label=""
-              value={queueData.breakTimeStart}
+              value={queueData.breakTimeFrom}
               onChange={handleBreakTimeStartChange}
               options={[
                 { value: '12:00 PM', label: '12:00 PM' },
@@ -111,7 +155,7 @@ export default function QueueStep2Page() {
                   isDropdown
               showLabel={false}
               label=""
-              value={queueData.breakTimeEnd}
+              value={queueData.breakTimeTo}
               onChange={handleBreakTimeEndChange}
               options={[
                 { value: '1:00 PM', label: '1:00 PM' },
