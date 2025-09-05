@@ -6,11 +6,13 @@ import { AuthProvider } from "./context/AuthContext";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  fallback: ["monospace"], 
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  fallback: ["monospace"], // Add fallback
 });
 
 export const metadata: Metadata = {
