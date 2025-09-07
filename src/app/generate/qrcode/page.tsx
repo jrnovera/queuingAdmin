@@ -125,9 +125,9 @@ export default function QRCodeDisplayPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-t-black border-r-gray-200 border-b-gray-200 border-l-gray-200 rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 mx-auto mb-4 border-4 rounded-full border-t-black border-r-gray-200 border-b-gray-200 border-l-gray-200 animate-spin"></div>
           <p>Loading queue data...</p>
         </div>
       </div>
@@ -142,8 +142,8 @@ export default function QRCodeDisplayPage() {
         </Link>
         
         <div className="max-w-4xl mx-auto mt-8 text-center">
-          <div className="bg-red-50 border border-red-200 p-6 rounded">
-            <h2 className="text-xl font-bold text-red-600 mb-2">Error</h2>
+          <div className="p-6 border border-red-200 rounded bg-red-50">
+            <h2 className="mb-2 text-xl font-bold text-red-600">Error</h2>
             <p>{error || 'Queue data not available'}</p>
           </div>
         </div>
@@ -161,34 +161,34 @@ export default function QRCodeDisplayPage() {
         {/* QR Code Display Section */}
         <div className="flex flex-col items-center justify-center gap-8" ref={qrContainerRef}>
           {/* Centered QR Code */}
-          <div className="p-8 bg-white flex justify-center">
+          <div className="flex justify-center p-8 bg-white">
             <QRCode 
               size={400} 
-              data={queue.queueId || 'no-id'}
+              data={`https://queuevreservasion/${queue.queueId}` || 'no-id'}
               queueName={queue.queueName || 'Your Queue'}
               location={queue.address || 'Location'}
             />
           </div>
           
           {/* Institution Info Below QR Code */}
-          <div className="border-2 border-black p-6 max-w-lg text-center">
-            <h2 className="text-lg font-bold mb-2">{queue.queueName}</h2>
-            <p className="text-sm mb-2">{queue.address}</p>
-            <p className="text-sm mb-1">Scheduled: {formatTimeDate(queue.dateTime)}</p>
-            <p className="text-sm mb-1">Valid until: {new Date(queue.expiration).toLocaleString()}</p>
+          <div className="max-w-lg p-6 text-center border-2 border-black">
+            <h2 className="mb-2 text-lg font-bold">{queue.queueName}</h2>
+            <p className="mb-2 text-sm">{queue.address}</p>
+            <p className="mb-1 text-sm">Scheduled: {formatTimeDate(queue.dateTime)}</p>
+            <p className="mb-1 text-sm">Valid until: {new Date(queue.expiration).toLocaleString()}</p>
             {queue.breakTimeFrom && queue.breakTimeTo && (
-              <p className="text-sm mb-1">Break time: {queue.breakTimeFrom} - {queue.breakTimeTo}</p>
+              <p className="mb-1 text-sm">Break time: {queue.breakTimeFrom} - {queue.breakTimeTo}</p>
             )}
             <p className="mt-3 text-sm font-bold">Queue ID: {queue.queueId}</p>
           </div>
         </div>
         
         {/* Categories Section */}
-        <div className="mt-8 border border-gray-300 p-4">
-          <h3 className="font-bold mb-2 text-left">Categories:</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 mt-8 border border-gray-300">
+          <h3 className="mb-2 font-bold text-left">Categories:</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {queue.categories.map((category, index) => (
-              <div key={`qr-category-${index}-${category.name || index}`} className="border border-gray-200 p-3 text-left">
+              <div key={`qr-category-${index}-${category.name || index}`} className="p-3 text-left border border-gray-200">
                 <h4 className="font-bold">{category.name}</h4>
                 <p className="text-sm">Limit: {category.limit} people</p>
                 <p className="text-sm">Time Limit: {category.timeLimit}</p>
@@ -209,24 +209,24 @@ export default function QRCodeDisplayPage() {
         
         {/* Notes Section */}
         {queue.notes && (
-          <div className="mt-4 border border-gray-300 p-4 text-left">
-            <h3 className="font-bold mb-2">Notes:</h3>
+          <div className="p-4 mt-4 text-left border border-gray-300">
+            <h3 className="mb-2 font-bold">Notes:</h3>
             <p className="text-sm">{queue.notes}</p>
           </div>
         )}
         
         {/* Download Button */}
-        <div className="mt-8 flex justify-center gap-4">
+        <div className="flex justify-center gap-4 mt-8">
           <button 
             onClick={handleDownloadQR}
-            className="bg-black text-white px-8 py-3 inline-block"
+            className="inline-block px-8 py-3 text-white bg-black"
           >
             DOWNLOAD QR
           </button>
           
           <button 
             onClick={handleShareQR}
-            className="bg-gray-800 text-white px-8 py-3 inline-block"
+            className="inline-block px-8 py-3 text-white bg-gray-800"
           >
             SHARE
           </button>
