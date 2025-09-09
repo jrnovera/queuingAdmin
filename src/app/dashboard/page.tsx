@@ -4,17 +4,15 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import BurgerMenu from '../components/BurgerMenu';
 import NotificationButton from '../components/notificationButton';
-import NotificationsDrawer, { AppNotification } from '../components/NotificationsDrawer';
-import { collectionGroup, limit, onSnapshot, query, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase/firestore';
+import NotificationsDrawer from '../components/NotificationsDrawer';
+import { observer } from 'mobx-react-lite';
+import { notificationsStore } from '../stores/notificationsStore';
 
-export default function DashboardPage() {
+const DashboardPage: React.FC = observer(function DashboardPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notifLoading, setNotifLoading] = useState(true);
-  const [lastClearedAt, setLastClearedAt] = useState<Date | null>(null);
   
   // Mock data for queues - in a real app, this would come from an API or database
   const [queues] = useState([
@@ -68,65 +66,21 @@ export default function DashboardPage() {
   // Open notifications drawer
   const openNotifications = () => {
     setNotifOpen(true);
+    notificationsStore.markAllRead();
     setHasUnread(false);
-    // Mark all as read: anything older than now will not show
-    setLastClearedAt(new Date());
   };
 
-  // Subscribe to join events across all queues via collection group
+  // Start MobX notifications listener on mount
   useEffect(() => {
-    // Adjust 'registrations' to the actual subcollection name for joins if different
     try {
-      const q = query(
-        collectionGroup(db, 'registrations'),
-        limit(100)
-      );
-      const unsub = onSnapshot(q, (snap) => {
-        const items: AppNotification[] = snap.docs.map((d) => {
-          interface RegistrationData {
-            displayName?: string;
-            name?: string;
-            queueName?: string;
-            name_of_queue?: string;
-            type?: string;
-            createdAt?: Timestamp;
-            time_in?: Timestamp;
-          }
-          const data = d.data() as RegistrationData;
-          const actor = data.displayName || data.name || 'Someone';
-          const queueName = data.queueName || data.name_of_queue || data.type || 'queue';
-          const createdAtTs: Timestamp | undefined = (data.createdAt as Timestamp) || (data.time_in as Timestamp) || undefined;
-          const createdAt: Date | undefined = createdAtTs ? createdAtTs.toDate() : undefined;
-          const message = `${actor} registered in the ${queueName.toUpperCase()} queue.`;
-          return {
-            id: d.id,
-            actorName: actor,
-            queueName,
-            message,
-            createdAt,
-          } as AppNotification;
-        })
-        .sort((a, b) => {
-          const toMillis = (x?: Date | Timestamp) => (!x ? 0 : x instanceof Timestamp ? x.toDate().getTime() : x.getTime());
-          const at = toMillis(a.createdAt);
-          const bt = toMillis(b.createdAt);
-          return bt - at;
-        })
-        // filter out items at or before lastClearedAt to show empty when user clicks
-        .filter(it => !lastClearedAt || (it.createdAt instanceof Date && it.createdAt > lastClearedAt));
-        setNotifications(items);
-        setNotifLoading(false);
-        if (!notifOpen && items.length > 0) setHasUnread(true);
-      }, (err) => {
-        console.error('Notifications listener error:', err);
-        setNotifLoading(false);
-      });
-      return () => unsub();
+      notificationsStore.startListening();
+      setNotifLoading(false);
     } catch (e) {
-      console.error('Failed to init notifications listener:', e);
+      console.error('Failed to start notifications listener:', e);
       setNotifLoading(false);
     }
-  }, [notifOpen, lastClearedAt]);
+    return () => notificationsStore.stopListening();
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
@@ -140,7 +94,7 @@ export default function DashboardPage() {
           ☰
         </button>
        
-        <NotificationButton onClick={openNotifications} hasUnread={hasUnread} />
+        <NotificationButton onClick={openNotifications} hasUnread={notificationsStore.hasUnread} />
       </header>
 
       {/* Burger Menu Component */}
@@ -196,9 +150,11 @@ export default function DashboardPage() {
       <NotificationsDrawer
         open={notifOpen}
         onClose={() => setNotifOpen(false)}
-        notifications={notifications}
+        notifications={notificationsStore.notifications}
         loading={notifLoading}
       />
     </div>
   );
-}
+});
+
+export default DashboardPage;

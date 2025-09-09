@@ -118,14 +118,20 @@ export default function ManageQueuesPage() {
   };
 
   // Filter queues by selected date first, then derive category names
+  // Match if EITHER time_in OR schedule falls on the selected date
   const dateFilteredQueues = selectedDate ? queues.filter(q => {
-    const dateToCheck: Date | null = q.time_in?.toDate?.() || q.schedule?.toDate?.() || null;
-    if (!dateToCheck) return false;
     const [y, m, d] = selectedDate.split('-').map(Number);
     if (!y || !m || !d) return true;
     const start = new Date(y, m - 1, d);
     const end = new Date(y, m - 1, d + 1);
-    return dateToCheck >= start && dateToCheck < end;
+
+    const inRange = (ts?: Timestamp) => {
+      if (!ts) return false;
+      const dt = ts.toDate();
+      return dt >= start && dt < end;
+    };
+
+    return inRange(q.time_in) || inRange(q.schedule);
   }) : queues;
 
   // Derive category names from date-filtered queues
@@ -144,6 +150,10 @@ export default function ManageQueuesPage() {
   const filteredQueues = !activeCategory
     ? dateFilteredQueues
     : dateFilteredQueues.filter(q => (q.type || '') === activeCategory);
+
+    useEffect(() => {
+      console.log('filteredQueues', JSON.stringify(filteredQueues, null, 2));
+    }, [filteredQueues]);
 
   if (loading) {
     return (
