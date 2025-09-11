@@ -18,11 +18,16 @@ export default function QueueStep3Page() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [notes, setNotes] = useState(queueData.notes || '');
-  const [users, setUsers] = useState<Array<{id: string, email: string, displayName: string}>>([]);
+  const [users, setUsers] = useState<Array<{id: string, email: string, displayName: string, role?: string}>>([]);
+
   const [showDropdown, setShowDropdown] = useState<number | null>(null);
   const { user } = useAuth();
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    console.log("Users:", JSON.stringify(users, null, 2));
+  }, [users]);
   
   // Handle click outside dropdown to close it
   useEffect(() => {
@@ -45,15 +50,16 @@ export default function QueueStep3Page() {
       setIsLoading(true);
       try {
         const usersList = await getUsers(user?.email);
-        setUsers(usersList as Array<{id: string, email: string, displayName: string}>);
+        setUsers(usersList as Array<{id: string, email: string, displayName: string, role?: string}>);
       } catch (error) {
         console.error('Error fetching users:', error);
         // If Firestore collection doesn't exist yet, use mock data
         setUsers([
-          { id: '1', email: 'staff1@example.com', displayName: 'Staff One' },
-          { id: '2', email: 'staff2@example.com', displayName: 'Staff Two' },
-          { id: '3', email: 'staff3@example.com', displayName: 'Staff Three' }
-        ]);
+          { id: '1', email: 'staff1@example.com', displayName: 'Staff One', role: 'admin' },
+          { id: '2', email: 'staff2@example.com', displayName: 'Staff Two', role: 'staff' },
+          { id: '3', email: 'staff3@example.com', displayName: 'Staff Three', role: 'manager' },
+          { id: '4', email: 'user1@example.com', displayName: 'Regular User', role: 'user' }
+        ].filter(user => user.role !== 'user')); // Filter out users with role === "user"
       } finally {
         setIsLoading(false);
       }

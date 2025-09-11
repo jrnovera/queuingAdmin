@@ -47,17 +47,19 @@ export const saveUserToFirestore = async (user: User, username?: string) => {
   }
 };
 
-// Get all users except the current user
+// Get all users except the current user and users with role === "user"
 export const getUsers = async (currentUserEmail: string | null | undefined) => {
   try {
     const usersCollection = collection(db, 'users');
     const usersQuery = query(usersCollection, where('email', '!=', currentUserEmail || ''));
     const usersSnapshot = await getDocs(usersQuery);
     
-    return usersSnapshot.docs.map(docSnapshot => ({
-      id: docSnapshot.id,
-      ...docSnapshot.data() as DocumentData
-    }));
+    return usersSnapshot.docs
+      .map(docSnapshot => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data() as DocumentData
+      }))
+      .filter((user: any) => user.role !== 'user'); // Filter out users with role === "user"
   } catch (error) {
     console.error('Error fetching users:', error);
     return [];
