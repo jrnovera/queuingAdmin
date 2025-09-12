@@ -51,6 +51,9 @@ const BurgerMenu: React.FC<BurgerMenuProps> = ({ isOpen, onClose }) => {
             <Link href="/queues" className="block p-2 hover:bg-gray-100">
               📋 Manage Queues
             </Link>
+            <Link href="/invitations" className="block p-2 hover:bg-gray-100">
+              📨 Invitations
+            </Link>
             <Link href="/history" className="block p-2 hover:bg-gray-100">
               📜 History
             </Link>

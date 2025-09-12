@@ -24,7 +24,7 @@ interface QueueContextType {
   updateQueueData: (data: Partial<Queue>) => void;
   addCategory: (category?: Partial<QueueCategory>) => void;
   removeCategory: (index: number) => void;
-  saveQueue: () => Promise<string>;
+  saveQueue: () => Promise<{queueId: string, categoryIds: string[]}>;
   getQueue: (queueId: string) => Promise<Queue | null>;
   getUserQueues: () => Promise<Queue[]>;
   addFormColumn: (column: string) => void;
@@ -107,7 +107,7 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
   };
   
   // Save queue to Firestore
-  const saveQueue = async (): Promise<string> => {
+  const saveQueue = async (): Promise<{queueId: string, categoryIds: string[]}> => {
     if (!user) {
       throw new Error('User must be authenticated to create a queue');
     }
@@ -136,11 +136,11 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
     
     try {
       // Save to Firestore
-      const queueId = await createQueue(queueWithCreator);
+      const result = await createQueue(queueWithCreator);
       
       // Update state with the new queue ID and clear localStorage
       setQueueData(prev => {
-        const newData = { ...prev, queueId };
+        const newData = { ...prev, queueId: result.queueId };
         // Clear localStorage after successful save
         if (typeof window !== 'undefined') {
           localStorage.removeItem('queueData');
@@ -148,7 +148,7 @@ export const QueueProvider = ({ children }: { children: React.ReactNode }) => {
         return newData;
       });
       
-      return queueId;
+      return result;
     } catch (error) {
       console.error('Error saving queue:', error);
       throw error;

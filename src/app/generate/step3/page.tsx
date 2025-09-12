@@ -5,6 +5,8 @@ import BackButton from '../../components/BackButton';
 import { useQueueContext } from '../../context/QueueContext';
 import { useAuth } from '../../context/AuthContext';
 import { getUsers } from '../../firebase/firestore';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../firebase/firestore';
 import { useRouter } from 'next/navigation';
 
 export default function QueueStep3Page() {
@@ -119,26 +121,100 @@ export default function QueueStep3Page() {
     setShowDropdown(showDropdown === index ? null : index);
   };
   
-  // Handle staff invitation
+  // Save invitation to Firestore (called after queue and categories are created)
+  const saveInvitationToFirestore = async (email: string, categoryIndex: number, queueId: string, categoryId: string) => {
+    try {
+      console.log('Starting saveInvitationToFirestore with:', { email, categoryIndex, queueId, categoryId });
+      
+      const category = queueData.categories[categoryIndex];
+      console.log('Category data:', category);
+      
+      const invitedUser = users.find(user => user.email === email);
+      console.log('Found invited user:', invitedUser);
+      
+      if (!invitedUser) {
+        console.error('Invited user not found in users list');
+        throw new Error('Invited user not found in users list');
+      }
+
+      if (!user?.uid) {
+        console.error('Current user not authenticated');
+        throw new Error('User not authenticated');
+      }
+
+      const invitationData = {
+        // Category data
+        categoryId: categoryId,
+        categoryName: category.name || '',
+        categoryLimit: category.limit || '10',
+        categoryTimeLimit: category.timeLimit || '5 Minutes',
+        
+        // Invitation details
+        invitedEmail: email,
+        invitedUserId: invitedUser.id,
+        invitedUserDisplayName: invitedUser.displayName || 'Unknown User', // Use displayName field
+        
+        // Inviter details
+        inviterUserId: user.uid,
+        inviterEmail: user.email || '',
+        
+        // Queue details
+        queueId: queueId,
+        queueName: queueData.queueName || '',
+        queueAddress: queueData.address || '',
+        
+        // Status and metadata
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+
+      console.log('Invitation data to save:', invitationData);
+
+      const docRef = await addDoc(collection(db, 'invitations'), invitationData);
+      console.log('Invitation saved to Firestore with ID:', docRef.id);
+      
+      return docRef.id;
+    } catch (error) {
+      console.error('Error saving invitation to Firestore:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+      throw error;
+    }
+  };
+
+  // Handle staff invitation (only update local state, save to Firestore later)
   const handleInviteStaff = (email: string, categoryIndex: number) => {
-    // In a real app, this would send an invitation to the staff email
-    const updatedCategories = [...queueData.categories];
-    const category = updatedCategories[categoryIndex];
-    
-    // Initialize invitedStaff array if it doesn't exist
-    if (!category.invitedStaff) {
-      category.invitedStaff = [];
+    try {
+      console.log('handleInviteStaff called with:', { email, categoryIndex });
+      
+      // Update local state only
+      const updatedCategories = [...queueData.categories];
+      const category = updatedCategories[categoryIndex];
+      
+      // Initialize invitedStaff array if it doesn't exist
+      if (!category.invitedStaff) {
+        category.invitedStaff = [];
+      }
+      
+      // Add email if not already in the list
+      if (!category.invitedStaff.includes(email)) {
+        category.invitedStaff.push(email);
+        updateQueueData({ categories: updatedCategories });
+      }
+      
+      // Close dropdown after selection
+      setShowDropdown(null);
+      console.log(`Staff added to local state: ${email} for category ${categoryIndex}`);
+      
+      // Show success message
+      alert(`Staff added to category: ${email}`);
+    } catch (error) {
+      console.error('Error adding staff to category:', error);
+      alert('Failed to add staff to category. Please try again.');
     }
-    
-    // Add email if not already in the list
-    if (!category.invitedStaff.includes(email)) {
-      category.invitedStaff.push(email);
-      updateQueueData({ categories: updatedCategories });
-    }
-    
-    // Close dropdown after selection
-    setShowDropdown(null);
-    console.log(`Invitation sent to staff: ${email} for category ${categoryIndex}`);
   };
   
   // Remove invited staff
@@ -149,6 +225,55 @@ export default function QueueStep3Page() {
     if (category.invitedStaff) {
       category.invitedStaff = category.invitedStaff.filter(staff => staff !== email);
       updateQueueData({ categories: updatedCategories });
+    }
+  };
+
+  // Save all invitations after queue and categories are created
+  const saveAllInvitations = async (queueId: string, categoryIds: string[]) => {
+    try {
+      console.log('=== SAVE ALL INVITATIONS DEBUG ===');
+      console.log('Queue ID:', queueId);
+      console.log('Category IDs:', categoryIds);
+      console.log('Queue data categories:', queueData.categories);
+      
+      const invitationPromises: Promise<string>[] = [];
+      
+      queueData.categories.forEach((category, categoryIndex) => {
+        console.log(`Category ${categoryIndex}:`, category);
+        console.log(`Category ${categoryIndex} invitedStaff:`, category.invitedStaff);
+        
+        if (category.invitedStaff && category.invitedStaff.length > 0) {
+          const categoryId = categoryIds[categoryIndex];
+          console.log(`Category ${categoryIndex} ID:`, categoryId);
+          
+          if (categoryId) {
+            category.invitedStaff.forEach(email => {
+              console.log(`Creating invitation for email: ${email} in category: ${categoryIndex}`);
+              invitationPromises.push(
+                saveInvitationToFirestore(email, categoryIndex, queueId, categoryId)
+              );
+            });
+          } else {
+            console.log(`No categoryId found for category ${categoryIndex}`);
+          }
+        } else {
+          console.log(`No invitedStaff for category ${categoryIndex}`);
+        }
+      });
+      
+      console.log('Total invitation promises:', invitationPromises.length);
+      
+      if (invitationPromises.length > 0) {
+        const invitationIds = await Promise.all(invitationPromises);
+        console.log('All invitations saved successfully:', invitationIds);
+        return invitationIds;
+      } else {
+        console.log('No invitations to save - no invitedStaff found in any category');
+        return [];
+      }
+    } catch (error) {
+      console.error('Error saving invitations:', error);
+      throw error;
     }
   };
 
@@ -308,6 +433,13 @@ export default function QueueStep3Page() {
             try {
               // Debug log before saving
               console.log('Step 3 - Final queue data before saving:', queueData);
+              console.log('=== INVITED STAFF DEBUG ===');
+              queueData.categories.forEach((category, index) => {
+                console.log(`Category ${index} (${category.name}):`, {
+                  invitedStaff: category.invitedStaff,
+                  hasInvitedStaff: category.invitedStaff && category.invitedStaff.length > 0
+                });
+              });
               
               // Validate required fields before saving
               if (!queueData.queueName || queueData.queueName.trim() === '') {
@@ -321,8 +453,26 @@ export default function QueueStep3Page() {
               }
               
               // Save queue data to Firestore
-              const queueId = await saveQueue();
-              console.log('Queue saved successfully with ID:', queueId);
+              const queueResult = await saveQueue();
+              console.log('=== QUEUE SAVE RESULT ===');
+              console.log('Queue saved successfully:', queueResult);
+              
+              // Extract queueId and categoryIds from the result
+              const queueId = queueResult.queueId;
+              const categoryIds = queueResult.categoryIds;
+              
+              console.log('Extracted queueId:', queueId);
+              console.log('Extracted categoryIds:', categoryIds);
+              
+              // Save all invitations with the actual queue and category IDs
+              try {
+                console.log('=== STARTING INVITATION SAVE ===');
+                await saveAllInvitations(queueId, categoryIds);
+                console.log('All invitations saved successfully');
+              } catch (invitationError) {
+                console.error('Error saving invitations (non-blocking):', invitationError);
+                // Don't block the flow if invitations fail
+              }
               
               // Navigate to QR code page with the queue ID using router.push
               router.push(`/generate/qrcode?id=${queueId}`);

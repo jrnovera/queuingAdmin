@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, deleteDoc, doc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, Timestamp, onSnapshot, query } from 'firebase/firestore';
 import { db } from '../firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
@@ -22,6 +22,7 @@ export default function ManageQueuesPage() {
 
   const [queues, setQueues] = useState<QueueListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD
   const { user } = useAuth();
@@ -35,12 +36,17 @@ export default function ManageQueuesPage() {
       router.push('/auth');
       return;
     }
-    fetchQueues();
   }, [user, router]);
 
-  const fetchQueues = async () => {
+  const fetchQueues = async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      
+      console.log('Fetching queues data...');
       // Fetch ALL from queuesList collection
       const querySnapshot = await getDocs(collection(db, 'queuesList'));
       const queuesData: QueueListItem[] = querySnapshot.docs.map(d => {
@@ -67,13 +73,75 @@ export default function ManageQueuesPage() {
           uid: data.uid || ''
         };
       });
+      
+      console.log('Fetched queues data:', queuesData);
       setQueues(queuesData);
     } catch (error) {
       console.error('Error fetching queues:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  // Manual refresh function
+  const handleRefresh = () => {
+    fetchQueues(true);
+  };
+
+  // Real-time listener for queuesList changes
+  useEffect(() => {
+    if (!user) return;
+
+    console.log('Setting up real-time listener for queuesList...');
+    
+    const colRef = collection(db, 'queuesList');
+    const q = query(colRef);
+    
+    const unsubscribe = onSnapshot(q, 
+      (querySnapshot) => {
+        console.log('Queues data changed, updating...', querySnapshot.docs.length, 'documents');
+        
+        const queuesData: QueueListItem[] = querySnapshot.docs.map(d => {
+          interface QueueData {
+            address?: string;
+            index1?: number | string;
+            name?: string;
+            schedule?: Timestamp;
+            status?: string;
+            time_in?: Timestamp;
+            type?: string;
+            uid?: string;
+          }
+          const data = d.data() as QueueData;
+          return {
+            id: d.id,
+            address: data.address || '',
+            index1: typeof data.index1 === 'number' ? data.index1 : Number(data.index1) || 0,
+            name: data.name || '',
+            schedule: data.schedule as Timestamp | undefined,
+            status: data.status,
+            time_in: data.time_in as Timestamp | undefined,
+            type: data.type,
+            uid: data.uid || ''
+          };
+        });
+        
+        console.log('Updated queues data:', queuesData);
+        setQueues(queuesData);
+        setLoading(false);
+      }, 
+      (error) => {
+        console.error('Error listening to queues:', error);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      console.log('Cleaning up queues listener...');
+      unsubscribe();
+    };
+  }, [user]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this queue? This action cannot be undone.')) {
@@ -151,9 +219,17 @@ export default function ManageQueuesPage() {
     ? dateFilteredQueues
     : dateFilteredQueues.filter(q => (q.type || '') === activeCategory);
 
-    useEffect(() => {
-      console.log('filteredQueues', JSON.stringify(filteredQueues, null, 2));
-    }, [filteredQueues]);
+  // Debug effect to monitor filtered queues changes
+  useEffect(() => {
+    console.log('Filtered queues updated:', {
+      totalQueues: queues.length,
+      dateFilteredQueues: dateFilteredQueues.length,
+      filteredQueues: filteredQueues.length,
+      activeCategory,
+      selectedDate
+    });
+  }, [queues, dateFilteredQueues, filteredQueues, activeCategory, selectedDate]);
+
 
   if (loading) {
     return (
@@ -207,44 +283,69 @@ export default function ManageQueuesPage() {
           </div>
         </div>
 
-        {/* Tabs-like section header */}
-        <div className="flex items-end border border-gray-800" role="tablist" aria-label="Queue categories">
-          {tabLabels.length === 0 ? (
-            <div className="text-sm font-semibold px-4 py-2">CATEGORIES</div>
-          ) : (
-            tabLabels.map((name, idx) => (
-              <button
-                key={name}
-                role="tab"
-                aria-selected={activeCategory === name}
-                onClick={() => setActiveCategory(name)}
-                className={(activeCategory === name
-                  ? 'bg-black text-white px-4 py-2'
-                  : 'px-4 py-1 border-l border-b border-gray-800 hover:bg-gray-50') + (idx === 0 ? '' : '')}
-              >
-                {name.toUpperCase()}
-              </button>
-            ))
-          )}
-          {/* Date filter */}
-          <div className="ml-auto flex items-center gap-2 px-3 py-2 border-l border-gray-800">
-            <label className="text-xs font-semibold" htmlFor="dateFilter">DATE</label>
-            <input
-              id="dateFilter"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="border border-gray-800 text-xs px-2 py-1"
-            />
-            {selectedDate && (
-              <button
-                type="button"
-                onClick={() => setSelectedDate('')}
-                className="text-xs underline"
-              >
-                Clear
-              </button>
-            )}
+        {/* Tabs-like section header with horizontal scroll */}
+        <div className="border border-gray-800">
+          <div className="flex items-end">
+            {/* Scrollable tabs container */}
+            <div className="flex-1 overflow-x-auto scrollbar-hide">
+              <div className="flex items-end min-w-max">
+                {tabLabels.length === 0 ? (
+                  <div className="text-sm font-semibold px-4 py-2">CATEGORIES</div>
+                ) : (
+                  <>
+                    {/* Show count of tabs if many */}
+                    {tabLabels.length > 8 && (
+                      <div className="text-xs text-gray-500 px-2 py-2 self-center">
+                        {tabLabels.length} categories
+                      </div>
+                    )}
+                    {tabLabels.map((name, idx) => (
+                      <button
+                        key={name}
+                        role="tab"
+                        aria-selected={activeCategory === name}
+                        onClick={() => setActiveCategory(name)}
+                        className={`whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors ${
+                          activeCategory === name
+                            ? 'bg-black text-white'
+                            : 'text-gray-700 hover:bg-gray-100 border-l border-b border-gray-800'
+                        } ${idx === 0 ? 'border-l-0' : ''}`}
+                        style={{ 
+                          minWidth: 'fit-content',
+                          maxWidth: '200px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                        title={name} // Show full name on hover
+                      >
+                        {name.length > 15 ? `${name.substring(0, 15)}...` : name.toUpperCase()}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+            
+            {/* Date filter - fixed position */}
+            <div className="flex items-center gap-2 px-3 py-2 border-l border-gray-800 bg-white flex-shrink-0">
+              <label className="text-xs font-semibold whitespace-nowrap" htmlFor="dateFilter">DATE</label>
+              <input
+                id="dateFilter"
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="border border-gray-800 text-xs px-2 py-1"
+              />
+              {selectedDate && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate('')}
+                  className="text-xs underline whitespace-nowrap"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -283,8 +384,28 @@ export default function ManageQueuesPage() {
 
         {/* Actions */}
         <div className="mt-4 flex items-center justify-between">
-          <button onClick={downloadAsFile} className="px-4 py-2 bg-black text-white text-sm">DOWNLOAD AS FILE</button>
-          
+          <div className="flex items-center gap-3">
+            <button onClick={downloadAsFile} className="px-4 py-2 bg-black text-white text-sm">DOWNLOAD AS FILE</button>
+            <button 
+              onClick={handleRefresh} 
+              disabled={refreshing}
+              className="px-4 py-2 bg-gray-600 text-white text-sm hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {refreshing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

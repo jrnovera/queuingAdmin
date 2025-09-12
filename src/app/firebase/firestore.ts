@@ -78,7 +78,7 @@ export const generateQueueId = (): string => {
 };
 
 // Create a new queue document
-export const createQueue = async (queueData: Queue): Promise<string> => {
+export const createQueue = async (queueData: Queue): Promise<{queueId: string, categoryIds: string[]}> => {
   try {
     // Generate a unique queue ID if not provided
     const queueId = queueData.queueId || generateQueueId();
@@ -104,6 +104,7 @@ export const createQueue = async (queueData: Queue): Promise<string> => {
     await setDoc(queueRef, sanitizedQueueData);
     
     // Create category documents with references to the queue
+    const categoryIds: string[] = [];
     if (queueData.categories && queueData.categories.length > 0) {
       await Promise.all(queueData.categories.map(async (category) => {
         const categoryId = `${queueId}-${category.name.replace(/\s+/g, '-').toLowerCase()}`;
@@ -115,10 +116,13 @@ export const createQueue = async (queueData: Queue): Promise<string> => {
           queueId,
           createdAt: new Date().toISOString(),
         });
+        
+        categoryIds.push(categoryId);
       }));
     }
     
-    return queueId;
+    console.log('Created queue with category IDs:', categoryIds);
+    return { queueId, categoryIds };
   } catch (error) {
     console.error('Error creating queue:', error);
     throw error;
