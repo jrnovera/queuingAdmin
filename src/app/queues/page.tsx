@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, deleteDoc, doc, Timestamp, onSnapshot, query } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, Timestamp, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
@@ -25,6 +25,12 @@ export default function ManageQueuesPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD
+  
+  // User access control state
+  const [userQueues, setUserQueues] = useState<string[]>([]);
+  const [userCategories, setUserCategories] = useState<string[]>([]);
+  const [userAccessLoading, setUserAccessLoading] = useState(true);
+  
   const { user } = useAuth();
   const router = useRouter();
   const navigatingAway = useRef(false);
@@ -89,18 +95,99 @@ export default function ManageQueuesPage() {
     fetchQueues(true);
   };
 
-  // Real-time listener for queuesList changes
+  // Fetch queues where user is the creator
+  const fetchUserCreatedQueues = async (): Promise<string[]> => {
+    if (!user?.uid) return [];
+    
+    try {
+      const queuesSnapshot = await getDocs(
+        query(collection(db, 'queues'), where('createdBy', '==', user.uid))
+      );
+      return queuesSnapshot.docs.map(doc => doc.id);
+    } catch (error) {
+      console.error('Error fetching user created queues:', error);
+      return [];
+    }
+  };
+
+  // Fetch categories where user is invited staff
+  const fetchUserInvitedCategories = async (): Promise<{queueIds: string[], categoryNames: string[]}> => {
+    if (!user?.email) return { queueIds: [], categoryNames: [] };
+    
+    try {
+      const categoriesSnapshot = await getDocs(
+        query(collection(db, 'categories'), where('invitedStaff', 'array-contains', user.email))
+      );
+      
+      const queueIds: string[] = [];
+      const categoryNames: string[] = [];
+      
+      categoriesSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.queueId) queueIds.push(data.queueId);
+        if (data.name) categoryNames.push(data.name);
+      });
+      
+      return { queueIds, categoryNames };
+    } catch (error) {
+      console.error('Error fetching user invited categories:', error);
+      return { queueIds: [], categoryNames: [] };
+    }
+  };
+
+  // Update user access data
+  const updateUserAccess = async () => {
+    if (!user) {
+      setUserQueues([]);
+      setUserCategories([]);
+      setUserAccessLoading(false);
+      return;
+    }
+
+    try {
+      setUserAccessLoading(true);
+      console.log('Updating user access for:', user.uid, user.email);
+      
+      // Fetch both creator queues and invited categories in parallel
+      const [createdQueueIds, invitedData] = await Promise.all([
+        fetchUserCreatedQueues(),
+        fetchUserInvitedCategories()
+      ]);
+      
+      // Combine all accessible queue IDs
+      const allAccessibleQueueIds = [...new Set([...createdQueueIds, ...invitedData.queueIds])];
+      
+      console.log('User accessible data:', {
+        createdQueues: createdQueueIds,
+        invitedQueues: invitedData.queueIds,
+        invitedCategories: invitedData.categoryNames,
+        allAccessibleQueues: allAccessibleQueueIds
+      });
+      
+      setUserQueues(allAccessibleQueueIds);
+      setUserCategories(invitedData.categoryNames);
+    } catch (error) {
+      console.error('Error updating user access:', error);
+      setUserQueues([]);
+      setUserCategories([]);
+    } finally {
+      setUserAccessLoading(false);
+    }
+  };
+
+  // Real-time listeners for queuesList, queues, and categories changes
   useEffect(() => {
     if (!user) return;
 
-    console.log('Setting up real-time listener for queuesList...');
+    console.log('Setting up real-time listeners...');
     
-    const colRef = collection(db, 'queuesList');
-    const q = query(colRef);
+    // Listener for queuesList changes
+    const queuesListRef = collection(db, 'queuesList');
+    const queuesListQuery = query(queuesListRef);
     
-    const unsubscribe = onSnapshot(q, 
+    const unsubscribeQueuesList = onSnapshot(queuesListQuery, 
       (querySnapshot) => {
-        console.log('Queues data changed, updating...', querySnapshot.docs.length, 'documents');
+        console.log('QueuesList data changed, updating...', querySnapshot.docs.length, 'documents');
         
         const queuesData: QueueListItem[] = querySnapshot.docs.map(d => {
           interface QueueData {
@@ -127,19 +214,52 @@ export default function ManageQueuesPage() {
           };
         });
         
-        console.log('Updated queues data:', queuesData);
+        console.log('Updated queuesList data:', queuesData);
         setQueues(queuesData);
         setLoading(false);
       }, 
       (error) => {
-        console.error('Error listening to queues:', error);
+        console.error('Error listening to queuesList:', error);
         setLoading(false);
       }
     );
 
+    // Listener for queues changes (affects user access)
+    const queuesRef = collection(db, 'queues');
+    const queuesQuery = query(queuesRef, where('createdBy', '==', user.uid));
+    
+    const unsubscribeQueues = onSnapshot(queuesQuery, 
+      (querySnapshot) => {
+        console.log('Queues data changed, updating user access...');
+        updateUserAccess();
+      }, 
+      (error) => {
+        console.error('Error listening to queues:', error);
+      }
+    );
+
+    // Listener for categories changes (affects user access)
+    const categoriesRef = collection(db, 'categories');
+    const categoriesQuery = query(categoriesRef, where('invitedStaff', 'array-contains', user.email || ''));
+    
+    const unsubscribeCategories = onSnapshot(categoriesQuery, 
+      (querySnapshot) => {
+        console.log('Categories data changed, updating user access...');
+        updateUserAccess();
+      }, 
+      (error) => {
+        console.error('Error listening to categories:', error);
+      }
+    );
+
+    // Initial user access update
+    updateUserAccess();
+
     return () => {
-      console.log('Cleaning up queues listener...');
-      unsubscribe();
+      console.log('Cleaning up listeners...');
+      unsubscribeQueuesList();
+      unsubscribeQueues();
+      unsubscribeCategories();
     };
   }, [user]);
 
@@ -185,9 +305,17 @@ export default function ManageQueuesPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Filter queues by selected date first, then derive category names
+  // Filter queues by user access first, then by selected date
+  const userAccessibleQueues = queues.filter(q => {
+    // Check if this queue entry belongs to a queue the user has access to
+    // We need to determine which queue this entry belongs to based on the type field
+    // The type field should match a category name from user's accessible queues
+    return userCategories.includes(q.type || '');
+  });
+
+  // Filter user-accessible queues by selected date
   // Match if EITHER time_in OR schedule falls on the selected date
-  const dateFilteredQueues = selectedDate ? queues.filter(q => {
+  const dateFilteredQueues = selectedDate ? userAccessibleQueues.filter(q => {
     const [y, m, d] = selectedDate.split('-').map(Number);
     if (!y || !m || !d) return true;
     const start = new Date(y, m - 1, d);
@@ -200,9 +328,9 @@ export default function ManageQueuesPage() {
     };
 
     return inRange(q.time_in) || inRange(q.schedule);
-  }) : queues;
+  }) : userAccessibleQueues;
 
-  // Derive category names from date-filtered queues
+  // Derive category names from user-accessible, date-filtered queues
   const tabLabels = Array.from(new Set(dateFilteredQueues.map(q => q.type || ''))).filter(Boolean);
   
   useEffect(() => {
@@ -223,22 +351,28 @@ export default function ManageQueuesPage() {
   useEffect(() => {
     console.log('Filtered queues updated:', {
       totalQueues: queues.length,
+      userAccessibleQueues: userAccessibleQueues.length,
       dateFilteredQueues: dateFilteredQueues.length,
       filteredQueues: filteredQueues.length,
+      userQueues: userQueues.length,
+      userCategories: userCategories.length,
       activeCategory,
-      selectedDate
+      selectedDate,
+      userAccessLoading
     });
-  }, [queues, dateFilteredQueues, filteredQueues, activeCategory, selectedDate]);
+  }, [queues, userAccessibleQueues, dateFilteredQueues, filteredQueues, userQueues, userCategories, activeCategory, selectedDate, userAccessLoading]);
 
 
-  if (loading) {
+  if (loading || userAccessLoading) {
     return (
       <div className="min-h-screen bg-white">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="animate-pulse">
             <div className="h-8 bg-gray-200 w-1/3 mb-6"></div>
             <div className="border border-gray-300">
-              <div className="bg-gray-100 px-6 py-3 border-b border-gray-300"></div>
+              <div className="bg-gray-100 px-6 py-3 border-b border-gray-300">
+                {userAccessLoading ? 'Loading your accessible queues...' : 'Loading...'}
+              </div>
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="px-6 py-4 border-t border-gray-300">
                   <div className="h-4 bg-gray-200 w-2/3"></div>
@@ -352,7 +486,17 @@ export default function ManageQueuesPage() {
         {/* Table or Empty State (hide header if empty) */}
         {filteredQueues.length === 0 ? (
           <div className="border border-t-0 border-gray-800 p-8 text-center text-gray-500">
-            {selectedDate ? 'No queues for the selected date.' : 'No queues yet. Create a new queue to get started.'}
+            {userQueues.length === 0 && userCategories.length === 0 ? (
+              <div>
+                <p className="text-lg font-medium mb-2">No accessible queues found</p>
+                <p className="text-sm">You haven't created any queues or been invited to any queues yet.</p>
+                <p className="text-sm mt-1">Create a new queue or wait for an invitation to get started.</p>
+              </div>
+            ) : selectedDate ? (
+              'No queues for the selected date.'
+            ) : (
+              'No queue entries found in your accessible queues.'
+            )}
           </div>
         ) : (
           <div className="border border-t-0 border-gray-800 overflow-hidden">

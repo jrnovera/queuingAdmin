@@ -110,8 +110,11 @@ export const createQueue = async (queueData: Queue): Promise<{queueId: string, c
         const categoryId = `${queueId}-${category.name.replace(/\s+/g, '-').toLowerCase()}`;
         const categoryRef = doc(db, 'categories', categoryId);
         
+        // Exclude invitedStaff field when saving to Firestore
+        const { invitedStaff, ...categoryDataWithoutInvitedStaff } = category;
+        
         await setDoc(categoryRef, {
-          ...category,
+          ...categoryDataWithoutInvitedStaff,
           categoryId,
           queueId,
           createdAt: new Date().toISOString(),

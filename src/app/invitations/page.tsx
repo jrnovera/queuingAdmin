@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs, deleteDoc, doc, Timestamp, onSnapshot, query, where, updateDoc, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, getDoc, deleteDoc, doc, Timestamp, onSnapshot, query, where, updateDoc, addDoc, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
@@ -118,42 +118,31 @@ export default function InvitationsPage() {
         updatedAt: serverTimestamp()
       });
 
-      // Get the highest index1 value from queuesList
-      const queuesSnapshot = await getDocs(collection(db, 'queuesList'));
-      let highestIndex = 0;
-      queuesSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        const index1 = typeof data.index1 === 'number' ? data.index1 : Number(data.index1) || 0;
-        if (index1 > highestIndex) {
-          highestIndex = index1;
+      // Find the category document and add the email to invitedStaff field
+      const categoryRef = doc(db, 'categories', invitation.categoryId);
+      const categoryDoc = await getDoc(categoryRef);
+      
+      if (categoryDoc.exists()) {
+        const categoryData = categoryDoc.data();
+        const currentInvitedStaff = categoryData.invitedStaff || [];
+        
+        // Add the email if not already in the list
+        if (!currentInvitedStaff.includes(invitation.invitedEmail)) {
+          await updateDoc(categoryRef, {
+            invitedStaff: [...currentInvitedStaff, invitation.invitedEmail],
+            updatedAt: serverTimestamp()
+          });
+          console.log('Email added to invitedStaff field in category document');
+        } else {
+          console.log('Email already exists in invitedStaff field');
         }
-      });
-
-      // Fetch queue data to get the date field
-      const queueDoc = await getDocs(query(collection(db, 'queues'), where('__name__', '==', invitation.queueId)));
-      let scheduleDate = new Date();
-      if (!queueDoc.empty) {
-        const queueData = queueDoc.docs[0].data();
-        scheduleDate = queueData.dateTime ? new Date(queueData.dateTime) : new Date();
+      } else {
+        console.error('Category document not found:', invitation.categoryId);
+        throw new Error('Category document not found');
       }
 
-      // Create new document in queuesList
-      const newQueueItem = {
-        address: invitation.queueAddress,
-        index1: highestIndex + 1,
-        name: invitation.invitedUserDisplayName,
-        schedule: Timestamp.fromDate(scheduleDate),
-        status: 'pending',
-        time_in: serverTimestamp(),
-        type: invitation.categoryName,
-        uid: invitation.invitedUserId,
-        queueId: invitation.queueId,
-        categoryId: invitation.categoryId
-      };
-
-      await addDoc(collection(db, 'queuesList'), newQueueItem);
-      console.log('Invitation accepted and queue item created successfully');
-      alert('Invitation accepted successfully! You have been added to the queue.');
+      console.log('Invitation accepted successfully');
+      alert('Invitation accepted successfully! You have been added to the invited staff list.');
     } catch (error) {
       console.error('Error accepting invitation:', error);
       alert('Failed to accept invitation. Please try again.');

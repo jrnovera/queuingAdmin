@@ -185,21 +185,21 @@ export default function QueueStep3Page() {
     }
   };
 
-  // Handle staff invitation (only update local state, save to Firestore later)
+  // Handle staff invitation (only update local state for UI display, don't add to invitedStaff field)
   const handleInviteStaff = (email: string, categoryIndex: number) => {
     try {
       console.log('handleInviteStaff called with:', { email, categoryIndex });
       
-      // Update local state only
+      // Update local state only for UI display (this won't be saved to Firestore)
       const updatedCategories = [...queueData.categories];
       const category = updatedCategories[categoryIndex];
       
-      // Initialize invitedStaff array if it doesn't exist
+      // Initialize invitedStaff array if it doesn't exist (for UI only)
       if (!category.invitedStaff) {
         category.invitedStaff = [];
       }
       
-      // Add email if not already in the list
+      // Add email if not already in the list (for UI display only)
       if (!category.invitedStaff.includes(email)) {
         category.invitedStaff.push(email);
         updateQueueData({ categories: updatedCategories });
@@ -207,10 +207,10 @@ export default function QueueStep3Page() {
       
       // Close dropdown after selection
       setShowDropdown(null);
-      console.log(`Staff added to local state: ${email} for category ${categoryIndex}`);
+      console.log(`Staff added to local UI state: ${email} for category ${categoryIndex}`);
       
       // Show success message
-      alert(`Staff added to category: ${email}`);
+      alert(`Invitation will be sent to: ${email}`);
     } catch (error) {
       console.error('Error adding staff to category:', error);
       alert('Failed to add staff to category. Please try again.');
