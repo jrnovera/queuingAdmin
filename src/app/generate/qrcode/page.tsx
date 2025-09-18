@@ -164,7 +164,7 @@ export default function QRCodeDisplayPage() {
           <div className="p-8 bg-white flex justify-center">
             <QRCode 
               size={400}
-              data={`https://queuevreservasion/${queue.queueId}` || 'no-id'}
+              data={`https://Localhost:3000/${queue.queueId}` || 'no-id'}
               queueName={queue.queueName || 'Your Queue'}
               location={queue.address || 'Location'}
             />
